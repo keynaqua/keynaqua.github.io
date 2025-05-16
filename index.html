@@ -11,6 +11,7 @@
       background: transparent;
       color: white;
     }
+
     #overlay {
       display: flex;
       align-items: center;
@@ -20,6 +21,7 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.5);
       width: 600px;
     }
+
     #cover {
       width: 64px;
       height: 64px;
@@ -27,17 +29,21 @@
       margin-right: 12px;
       background: #333;
     }
+
     #track-info {
       flex: 1;
     }
+
     #track-title {
       font-size: 18px;
       font-weight: bold;
     }
+
     #track-artist {
       font-size: 14px;
       color: #ccc;
     }
+
     #progress-bar {
       width: 100%;
       height: 6px;
@@ -46,6 +52,7 @@
       margin-top: 10px;
       overflow: hidden;
     }
+
     #progress {
       height: 100%;
       width: 0%;
@@ -67,92 +74,49 @@
   </div>
 
   <script>
-    const apiKey   = '90f41e0ec988a78dcc5935c83bce9ba2'; // ta vraie clé sans accents
-    const username = 'Aqua_Keyn';                        // ton pseudo Last.fm
-    const pollMs   = 5000;                               // intervalle de 5 s
+    const apiKey = '90f41e0ec988a78dcc5935c83bce9ba2'; // remplace par ta vraie clé
+    const username = 'Aqua_Keyn'; // remplace par ton nom d'utilisateur
+    const updateInterval = 5000; // toutes les 5 secondes
 
-    let currentTrackId = null;
-    let trackStartTime = 0;
-    let trackDuration  = 0;
+    let lastTrack = null;
+    let startTime = null;
+    let duration = 180;
 
-    // Helper JSONP
-    function jsonp(url, callbackTag) {
-      return new Promise((resolve, reject) => {
-        const cbName = `cb_${callbackTag}_${Date.now()}`;
-        window[cbName] = data => {
-          resolve(data);
-          delete window[cbName];
-          document.body.removeChild(script);
-        };
-        const script = document.createElement('script');
-        script.src = `${url}&callback=${cbName}`;
-        script.onerror = () => reject(new Error('JSONP load error'));
-        document.body.appendChild(script);
-      });
-    }
+    console.log('Last.fm API key:', apiKey);
+    console.log('Last.fm username:', username);
 
-    async function updateOverlay() {
-      try {
-        // 1) Récupère les 5 derniers tracks en JSONP
-        const recent = await jsonp(
-          `https://ws.audioscrobbler.com/2.0/?
-            method=user.getrecenttracks
-            &user=${username}
-            &api_key=${apiKey}
-            &format=json
-            &limit=5`
-            .replace(/\s+/g, ''), 'recent'
-        );
+    async function getNowPlaying() {
+      const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const track = data.recenttracks.track[0];
 
-        // 2) Cherche le track en cours ("nowplaying")
-        const now = recent.recenttracks.track.find(t => t['@attr']?.nowplaying);
-        if (!now) {
-          // pas de musique live
-          document.getElementById('progress').style.width = '0%';
-          return;
-        }
+      if (!track) return;
 
-        // 3) Identifiant unique (mbid ou fallback)
-        const thisId = now.mbid || now.url || now.name + now.artist['#text'];
+      const isNowPlaying = track['@attr'] && track['@attr'].nowplaying;
 
-        // 4) Si nouveau morceau, on reset et récupère durée
-        if (thisId !== currentTrackId) {
-          currentTrackId  = thisId;
-          trackStartTime  = Date.now();
+      if (track.name !== lastTrack) {
+        lastTrack = track.name;
+        startTime = Date.now();
+        duration = 180;
 
-          if (now.mbid) {
-            const info = await jsonp(
-              `https://ws.audioscrobbler.com/2.0/?
-                method=track.getInfo
-                &api_key=${apiKey}
-                &mbid=${now.mbid}
-                &format=json`
-                .replace(/\s+/g, ''), 'info'
-            );
-            trackDuration = Math.max(1, Math.floor(info.track.duration / 1000));
-          } else {
-            trackDuration = 180; // fallback
-          }
-
-          // Mise à jour de l'UI
-          document.getElementById('track-title').textContent  = now.name;
-          document.getElementById('track-artist').textContent = now.artist['#text'];
-          document.getElementById('cover').src               = now.image[2]['#text'] || '';
-        }
-
-        // 5) Calcul et affichage de la progression
-        const elapsed = (Date.now() - trackStartTime) / 1000;
-        const pct     = Math.min(100, (elapsed / trackDuration) * 100);
-        document.getElementById('progress').style.width = pct + '%';
-
-      } catch (e) {
-        console.error('Overlay JSONP error:', e);
+        document.getElementById('track-title').textContent = track.name;
+        document.getElementById('track-artist').textContent = track.artist['#text'];
+        document.getElementById('cover').src = track.image[2]['#text'] || '';
       }
+
+      if (!isNowPlaying) {
+        document.getElementById('progress').style.width = '0%';
+        return;
+      }
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      const percent = Math.min(100, (elapsed / duration) * 100);
+      document.getElementById('progress').style.width = percent + '%';
     }
 
-    // Lancement initial et intervalle
-    setInterval(updateOverlay, pollMs);
-    updateOverlay();
+    setInterval(getNowPlaying, updateInterval);
+    getNowPlaying();
   </script>
 </body>
 </html>
