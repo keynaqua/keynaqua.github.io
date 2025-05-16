@@ -74,67 +74,42 @@
   </div>
 
   <script>
-    const apiKey = '90f41e0ec988a78dcc5935c83bce9ba2'; // ta vraie clé
-    const username = 'Aqua_Keyn'; // ton username Last.fm
-    const updateInterval = 5000;
+    const apiKey = '90f41e0ec988a78dcc5935c83bce9ba2'; // remplace par ta vraie clé
+    const username = 'Aqua_Keyn'; // remplace par ton nom d'utilisateur
+    const updateInterval = 5000; // toutes les 5 secondes
 
-    let currentTrackId = null;
-    let startTime = Date.now();
+    let lastTrack = null;
+    let startTime = null;
     let duration = 180;
 
-    async function fetchJson(url) {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      return res.json();
-    }
-
     async function getNowPlaying() {
-      try {
-        const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
-        const data = await fetchJson(url);
-        const track = data?.recenttracks?.track?.[0];
+      const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const track = data.recenttracks.track[0];
 
-        if (!track) return;
+      if (!track) return;
 
-        const isNowPlaying = track['@attr']?.nowplaying === 'true';
-        const artist = track.artist?.['#text'] || 'Inconnu';
-        const title = track.name || 'Sans titre';
-        const cover = track.image?.[2]?.['#text'] || '';
-        const mbid = track.mbid || track.url || (title + artist);
+      const isNowPlaying = track['@attr'] && track['@attr'].nowplaying;
 
-        if (mbid !== currentTrackId && isNowPlaying) {
-          currentTrackId = mbid;
-          startTime = Date.now();
-          duration = 180;
+      if (track.name !== lastTrack) {
+        lastTrack = track.name;
+        startTime = Date.now();
+        duration = 180;
 
-          // Tentative de récupérer la vraie durée via mbid
-          if (track.mbid) {
-            try {
-              const infoUrl = `https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&mbid=${track.mbid}&format=json`;
-              const infoData = await fetchJson(infoUrl);
-              const ms = infoData?.track?.duration;
-              if (ms) duration = Math.floor(ms / 1000);
-            } catch (err) {
-              console.warn("Durée inconnue, valeur par défaut", err);
-            }
-          }
-
-          document.getElementById('track-title').textContent = title;
-          document.getElementById('track-artist').textContent = artist;
-          document.getElementById('cover').src = cover;
-        }
-
-        if (isNowPlaying) {
-          const elapsed = (Date.now() - startTime) / 1000;
-          const percent = Math.min(100, (elapsed / duration) * 100);
-          document.getElementById('progress').style.width = percent + '%';
-        } else {
-          document.getElementById('progress').style.width = '0%';
-        }
-
-      } catch (err) {
-        console.error('Overlay error:', err);
+        document.getElementById('track-title').textContent = track.name;
+        document.getElementById('track-artist').textContent = track.artist['#text'];
+        document.getElementById('cover').src = track.image[2]['#text'] || '';
       }
+
+      if (!isNowPlaying) {
+        document.getElementById('progress').style.width = '0%';
+        return;
+      }
+
+      const elapsed = (Date.now() - startTime) / 1000;
+      const percent = Math.min(100, (elapsed / duration) * 100);
+      document.getElementById('progress').style.width = percent + '%';
     }
 
     setInterval(getNowPlaying, updateInterval);
