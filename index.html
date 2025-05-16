@@ -82,6 +82,9 @@
     let startTime = null;
     let duration = 180;
 
+    console.log('Last.fm API key:', apiKey);
+    console.log('Last.fm username:', username);
+
     async function getNowPlaying() {
       const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
       const res = await fetch(url);
