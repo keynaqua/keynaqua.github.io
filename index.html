@@ -76,7 +76,7 @@
   <script>
     const apiKey = '90f41e0ec988a78dcc5935c83bce9ba2'; // ta vraie clé
     const username = 'Aqua_Keyn'; // ton username Last.fm
-    const updateInterval = 5000; // toutes les 5 secondes
+    const updateInterval = 5000;
 
     let currentTrackId = null;
     let startTime = Date.now();
@@ -92,37 +92,38 @@
       try {
         const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
         const data = await fetchJson(url);
-        const track = data.recenttracks.track?.[0];
+        const track = data?.recenttracks?.track?.[0];
 
         if (!track) return;
 
         const isNowPlaying = track['@attr']?.nowplaying === 'true';
-        const artist = track.artist['#text'];
-        const title = track.name;
-        const cover = track.image[2]['#text'] || '';
-        const mbid = track.mbid || track.url || title + artist; // fallback ID
+        const artist = track.artist?.['#text'] || 'Inconnu';
+        const title = track.name || 'Sans titre';
+        const cover = track.image?.[2]?.['#text'] || '';
+        const mbid = track.mbid || track.url || (title + artist);
 
-        // Si nouvelle musique détectée
         if (mbid !== currentTrackId && isNowPlaying) {
           currentTrackId = mbid;
           startTime = Date.now();
-          duration = 180; // par défaut
+          duration = 180;
 
-          // Essaie de récupérer la vraie durée
+          // Tentative de récupérer la vraie durée via mbid
           if (track.mbid) {
-            const infoUrl = `https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&mbid=${track.mbid}&format=json`;
-            const infoData = await fetchJson(infoUrl);
-            const ms = infoData.track?.duration;
-            if (ms) duration = Math.floor(ms / 1000);
+            try {
+              const infoUrl = `https://ws.audioscrobbler.com/2.0/?method=track.getInfo&api_key=${apiKey}&mbid=${track.mbid}&format=json`;
+              const infoData = await fetchJson(infoUrl);
+              const ms = infoData?.track?.duration;
+              if (ms) duration = Math.floor(ms / 1000);
+            } catch (err) {
+              console.warn("Durée inconnue, valeur par défaut", err);
+            }
           }
 
-          // Met à jour l'affichage
           document.getElementById('track-title').textContent = title;
           document.getElementById('track-artist').textContent = artist;
           document.getElementById('cover').src = cover;
         }
 
-        // Met à jour la barre de progression
         if (isNowPlaying) {
           const elapsed = (Date.now() - startTime) / 1000;
           const percent = Math.min(100, (elapsed / duration) * 100);
@@ -132,7 +133,7 @@
         }
 
       } catch (err) {
-        console.error('Erreur overlay :', err);
+        console.error('Overlay error:', err);
       }
     }
 
