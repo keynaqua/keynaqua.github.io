@@ -2,7 +2,6 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="refresh" content="1">
   <title>Deezer Overlay</title>
   <style>
     body {
@@ -75,49 +74,84 @@
   </div>
 
   <script>
-    const apiKey = '90f41e0ec988a78dcc5935c83bce9ba2'; // remplace par ta vraie clé
-    const username = 'Aqua_Keyn'; // remplace par ton nom d'utilisateur
-    const updateInterval = 5000; // toutes les 5 secondes
+  const apiKey   = 'TA_CLÉ_API_LASTFM';
+  const username = 'TON_UTILISATEUR_LASTFM';
+  const pollMs   = 5000; // toutes les 5s
 
-    let lastTrack = null;
-    let startTime = null;
-    let duration = 180;
+  let currentTrackId = null;
+  let trackStartTime = 0;
+  let trackDuration  = 0;
 
-    console.log('Last.fm API key:', apiKey);
-    console.log('Last.fm username:', username);
+  async function fetchJson(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return res.json();
+  }
 
-    async function getNowPlaying() {
-      const url = `https://ws.audioscrobbler.com/2.0/?method=user.getrecenttracks&user=${username}&api_key=${apiKey}&format=json&limit=1`;
-      const res = await fetch(url);
-      const data = await res.json();
-      const track = data.recenttracks.track[0];
+  async function updateOverlay() {
+    try {
+      // 1) Récupère la liste des derniers tracks
+      const recent = await fetchJson(
+        `https://ws.audioscrobbler.com/2.0/
+          ?method=user.getrecenttracks
+          &user=${username}
+          &api_key=${apiKey}
+          &format=json
+          &limit=5`
+          .replace(/\s+/g, '')
+      );
 
-      if (!track) return;
+      // 2) Cherche le track maintenant en cours
+      const now = recent.recenttracks.track
+        .find(t => t['@attr']?.nowplaying);
 
-      const isNowPlaying = track['@attr'] && track['@attr'].nowplaying;
-
-      if (track.name !== lastTrack) {
-        lastTrack = track.name;
-        startTime = Date.now();
-        duration = 180;
-
-        document.getElementById('track-title').textContent = track.name;
-        document.getElementById('track-artist').textContent = track.artist['#text'];
-        document.getElementById('cover').src = track.image[2]['#text'] || '';
-      }
-
-      if (!isNowPlaying) {
+      if (!now) {
+        // pas de musique en cours → on peut masquer ou reset
         document.getElementById('progress').style.width = '0%';
         return;
       }
 
-      const elapsed = (Date.now() - startTime) / 1000;
-      const percent = Math.min(100, (elapsed / duration) * 100);
-      document.getElementById('progress').style.width = percent + '%';
-    }
+      // 3) Identifiant unique du morceau
+      const thisId = now.mbid || now.url || now.name + now.artist['#text'];
 
-    setInterval(getNowPlaying, updateInterval);
-    getNowPlaying();
-  </script>
+      // 4) Si c'est un nouveau morceau
+      if (thisId !== currentTrackId) {
+        currentTrackId   = thisId;
+        trackStartTime   = Date.now();
+        // récupère la durée exacte
+        if (now.mbid) {
+          const info = await fetchJson(
+            `https://ws.audioscrobbler.com/2.0/
+              ?method=track.getInfo
+              &api_key=${apiKey}
+              &mbid=${now.mbid}
+              &format=json`
+              .replace(/\s+/g, '')
+          );
+          trackDuration = Math.max(1, Math.floor(info.track.duration / 1000));
+        } else {
+          trackDuration = 180; // fallback
+        }
+
+        // met à jour l’UI
+        document.getElementById('track-title').textContent  = now.name;
+        document.getElementById('track-artist').textContent = now.artist['#text'];
+        document.getElementById('cover').src               = now.image[2]['#text'] || '';
+      }
+
+      // 5) Calcul de la progression
+      const elapsed = (Date.now() - trackStartTime) / 1000;
+      const pct     = Math.min(100, (elapsed / trackDuration) * 100);
+      document.getElementById('progress').style.width = pct + '%';
+
+    } catch (e) {
+      console.error('Overlay error:', e);
+    }
+  }
+
+  // Lancement
+  setInterval(updateOverlay, pollMs);
+  updateOverlay();
+</script>
 </body>
 </html>
